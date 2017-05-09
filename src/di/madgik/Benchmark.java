@@ -36,14 +36,14 @@ public class Benchmark {
                     "SELECT  ?x ?y ?z ?w WHERE{ ?x <r1> ?y . ?x <r2> ?z . ?z <r3> ?w}", prefixes);
 
             evaluateAndPrintResults(prefixes, tupleIterator);
-
+            evaluateAndPrintResultsAsTriples(prefixes, tupleIterator);
             store1.setNumberOfThreads(2);
             store1.importFiles(new File[] {new File("data/result1.ttl")});
             System.out.println("Number of tuples after import: " + store1.getTriplesCount());
 
             System.out.println("This should be the same as");
             tupleIterator = store1.compileQuery(
-                    "SELECT  ?x ?y ?z ?w WHERE{ ?ans <x> ?x . ?ans <y> ?y . ?ans <z> ?z . ?ans <w> ?w}", prefixes);
+                    "SELECT  ?x ?y ?z ?w WHERE{ ?ans <term0> ?x . ?ans <term1> ?y . ?ans <term2> ?z . ?ans <term3> ?w}", prefixes);
             evaluateAndPrintResults(prefixes, tupleIterator);
         } finally {
             // When no longer needed, the data store should be disposed so that all related resources are released.
@@ -195,6 +195,7 @@ public class Benchmark {
         // We iterate trough the result tuples
         for (long multiplicity = tupleIterator.open(); multiplicity != 0; multiplicity = tupleIterator.advance()) {
             // We iterate trough the terms of each tuple
+
             for (int termIndex = 0; termIndex < arity; ++termIndex) {
                 if (termIndex != 0)
                     System.out.print("  ");
@@ -212,6 +213,29 @@ public class Benchmark {
             System.out.print(multiplicity);
             System.out.println();
             ++numberOfRows;
+        }
+        System.out.println("---------------------------------------------------------------------------------------");
+        System.out.println("  The number of rows returned: " + numberOfRows);
+        System.out.println("=======================================================================================");
+        System.out.println();
+    }
+
+    public void evaluateAndPrintResultsAsTriples(Prefixes prefixes, TupleIterator tupleIterator) throws JRDFoxException {
+        int numberOfRows = 0;
+        System.out.println();
+        System.out.println("=======================================================================================");
+        int arity = tupleIterator.getArity();
+        // We iterate trough the result tuples
+        for (long multiplicity = tupleIterator.open(); multiplicity != 0; multiplicity = tupleIterator.advance()) {
+            // We iterate trough the terms of each tuple
+            ++numberOfRows;
+            for (int termIndex = 0; termIndex < arity; ++termIndex) {
+
+                Resource resource = tupleIterator.getResource(termIndex);
+                System.out.println("<ans" + numberOfRows +"> <term" + termIndex  + "> " +
+                        resource.toString(prefixes) + " .");
+            }
+
         }
         System.out.println("---------------------------------------------------------------------------------------");
         System.out.println("  The number of rows returned: " + numberOfRows);
