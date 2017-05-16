@@ -12,9 +12,10 @@ import uk.ac.ox.cs.JRDFox.store.DataStore.Format;
 import uk.ac.ox.cs.JRDFox.store.DataStore;
 import uk.ac.ox.cs.JRDFox.store.TupleIterator;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.URISyntaxException;
+import java.time.Duration;
+import java.time.Instant;
 
 /**
  * Created by vaggelis on 9/5/2017.
@@ -36,7 +37,7 @@ public class Benchmark {
                     "SELECT  ?x ?y ?z ?w WHERE{ ?x <r1> ?y . ?x <r2> ?z . ?z <r3> ?w}", prefixes);
 
             evaluateAndPrintResults(prefixes, tupleIterator);
-            evaluateAndPrintResultsAsTriples(prefixes, tupleIterator);
+            //evaluateAndPrintResultsAsTriples(prefixes, tupleIterator);
             store1.setNumberOfThreads(2);
             store1.importFiles(new File[] {new File("data/result1.ttl")});
             System.out.println("Number of tuples after import: " + store1.getTriplesCount());
@@ -50,6 +51,158 @@ public class Benchmark {
             store.dispose();
             store1.dispose();
         }
+    }
+
+    public void simpleQueryBench(String infile) throws JRDFoxException {
+        System.out.println("+++++++++++Running original on RDFox+++++++++++");
+        DataStore store = new DataStore(DataStore.StoreType.ParallelSimpleNN);
+       // DataStore store = new DataStore(DataStore.StoreType.ParallelSimpleNN);
+        try {
+            System.out.println("Setting the number of threads...");
+            store.setNumberOfThreads(1);
+            System.out.println("Importing...");
+            Instant start = Instant.now();
+            store.importFiles(new File[] {new File(infile)});
+            Instant end = Instant.now();
+            System.out.println("Number of tuples after import: " + store.getTriplesCount());
+            System.out.println("Imported in: " + Duration.between(start, end));
+
+            Prefixes prefixes = Prefixes.DEFAULT_IMMUTABLE_INSTANCE;
+            System.out.println("Retrieving all properties before materialisation.");
+            start = Instant.now();
+            TupleIterator tupleIterator = store.compileQuery(
+                    "SELECT  ?x ?y ?z ?w WHERE{  ?x <r1> ?y . ?x <r2> ?z . ?z <r3> ?w }", prefixes);
+
+
+
+
+            end = Instant.now();
+            System.out.println("Compile query execution time: " + Duration.between(start, end));
+            start = Instant.now();
+            evaluateResults(prefixes, tupleIterator);
+            //store.save(new File("testfile.tmp"));
+            end = Instant.now();
+            System.out.println("evaluate results execution time: " + Duration.between(start, end));
+//            evaluateAndPrintResultsAsTriples(prefixes, tupleIterator,"data/result1000000V2-0.0000001.ttl");
+//
+//            tupleIterator = store.compileQuery(
+//                    "SELECT  Distinct ?x WHERE{ ?x <r1> ?y . ?x <r2> ?z . ?z <r3> ?w}", prefixes);
+//            evaluateAndPrintResultsHeadsAsTriples(prefixes, tupleIterator,"data/result1000000V2-0.0000001-heads.ttl", "q1");
+        } finally {
+            // When no longer needed, the data store should be disposed so that all related resources are released.
+            store.dispose();
+        }
+        System.out.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+    }
+
+    public void simpleQueryBenchUsingHeads(String infile, String headsFile) throws JRDFoxException {
+        System.out.println("+++++++++++Running query with results heads on RDFox+++++++++++");
+        DataStore store = new DataStore(DataStore.StoreType.ParallelSimpleNN);
+        // DataStore store = new DataStore(DataStore.StoreType.ParallelSimpleNN);
+        try {
+            System.out.println("Setting the number of threads...");
+            store.setNumberOfThreads(1);
+            System.out.println("Importing...");
+            Instant start = Instant.now();
+            store.importFiles(new File[] {new File(infile), new File(headsFile)});
+            Instant end = Instant.now();
+            System.out.println("Number of tuples after import: " + store.getTriplesCount());
+            System.out.println("Imported in: " + Duration.between(start, end));
+
+            Prefixes prefixes = Prefixes.DEFAULT_IMMUTABLE_INSTANCE;
+            System.out.println("Retrieving all properties before materialisation.");
+            start = Instant.now();
+            TupleIterator tupleIterator = store.compileQuery(
+                    "SELECT  ?x ?y ?z ?w WHERE{ <q1> <res> ?x .  ?x <r1> ?y . ?x <r2> ?z . ?z <r3> ?w }", prefixes);
+
+
+//            TupleIterator tupleIterator = store.compileQuery(
+//                    "SELECT  Distinct ?x WHERE{ ?x <r1> ?y . ?x <r2> ?z . ?z <r3> ?w}", prefixes);
+
+            end = Instant.now();
+            System.out.println("Compile query execution time: " + Duration.between(start, end));
+            start = Instant.now();
+            evaluateResults(prefixes, tupleIterator);
+            //store.save(new File("testfile.tmp"));
+            end = Instant.now();
+            System.out.println("evaluate results execution time: " + Duration.between(start, end));
+           // evaluateAndPrintResultsAsTriples(prefixes, tupleIterator,"data/result100000V2-0.0001.ttl");
+            //evaluateAndPrintResultsHeadsAsTriples(prefixes, tupleIterator,"data/result100000V2-0.0001-heads.ttl", "q1");
+        } finally {
+            // When no longer needed, the data store should be disposed so that all related resources are released.
+            store.dispose();
+        }
+        System.out.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+    }
+
+
+    private void evaluateAndPrintResultsHeadsAsTriples(Prefixes prefixes, TupleIterator tupleIterator, String outFile, String q1)
+            throws JRDFoxException {
+        int numberOfRows = 0;
+        System.out.println();
+        System.out.println("=======================================================================================");
+        int arity = tupleIterator.getArity();
+        try (Writer writer = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(outFile), "utf-8"))) {
+            // We iterate trough the result tuples
+            for (long multiplicity = tupleIterator.open(); multiplicity != 0; multiplicity = tupleIterator.advance()) {
+                // We iterate trough the terms of each tuple
+                ++numberOfRows;
+
+
+                Resource resource = tupleIterator.getResource(0);
+                writer.write("<" + q1 + "> <res> " +
+                        resource.toString(prefixes) + " .\n");
+
+
+            }
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        System.out.println("---------------------------------------------------------------------------------------");
+        System.out.println("  The number of rows returned: " + numberOfRows);
+        System.out.println("=======================================================================================");
+        System.out.println();
+
+    }
+
+    public void simpleAlternativeQueryBench(String infile) throws JRDFoxException {
+        System.out.println("+++++++++++Running alternative Query on RDFox+++++++++++");
+        DataStore store = new DataStore(DataStore.StoreType.ParallelSimpleNN);
+
+        try {
+            System.out.println("Setting the number of threads...");
+            store.setNumberOfThreads(1);
+            System.out.println("Importing...");
+            Instant start = Instant.now();
+            store.importFiles(new File[] {new File(infile)});
+            Instant end = Instant.now();
+            System.out.println("Number of tuples after import: " + store.getTriplesCount());
+            System.out.println("Imported in: " + Duration.between(start, end));
+
+            Prefixes prefixes = Prefixes.DEFAULT_IMMUTABLE_INSTANCE;
+            System.out.println("Retrieving all properties before materialisation.");
+            start = Instant.now();
+            TupleIterator tupleIterator = store.compileQuery(
+                    "SELECT  ?x ?y ?z ?w WHERE{ ?ans <term0> ?x . ?ans <term1> ?y . ?ans <term2> ?z . ?ans <term3> ?w}", prefixes);
+            end = Instant.now();
+            System.out.println("Compile query execution time: " + Duration.between(start, end));
+
+            start = Instant.now();
+            evaluateResults(prefixes, tupleIterator);
+            end = Instant.now();
+            System.out.println("evaluate results execution time: " + Duration.between(start, end));
+            //evaluateAndPrintResultsAsTriples(prefixes, tupleIterator);
+
+        } finally {
+            // When no longer needed, the data store should be disposed so that all related resources are released.
+            store.dispose();
+        }
+        System.out.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
     }
 
     public void demo() throws JRDFoxException, URISyntaxException, OWLOntologyCreationException {
@@ -187,6 +340,21 @@ public class Benchmark {
         System.out.println("This is the end of the example!");
     }
 
+    public void evaluateResults(Prefixes prefixes, TupleIterator tupleIterator) throws JRDFoxException {
+        int numberOfRows = 0;
+        System.out.println();
+
+        int arity = tupleIterator.getArity();
+        // We iterate trough the result tuples
+        for (long multiplicity = tupleIterator.open(); multiplicity != 0; multiplicity = tupleIterator.advance()) {
+            // We iterate trough the terms of each tuple
+            ++numberOfRows;
+        }
+
+        System.out.println("  The number of rows returned: " + numberOfRows);
+        System.out.println("=======================================================================================");
+    }
+
     public void evaluateAndPrintResults(Prefixes prefixes, TupleIterator tupleIterator) throws JRDFoxException {
         int numberOfRows = 0;
         System.out.println();
@@ -220,6 +388,37 @@ public class Benchmark {
         System.out.println();
     }
 
+    public void evaluateAndPrintResultsAsTriples(Prefixes prefixes, TupleIterator tupleIterator, String outFile) throws JRDFoxException {
+        int numberOfRows = 0;
+        System.out.println();
+        System.out.println("=======================================================================================");
+        int arity = tupleIterator.getArity();
+        try (Writer writer = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(outFile), "utf-8"))) {
+            // We iterate trough the result tuples
+            for (long multiplicity = tupleIterator.open(); multiplicity != 0; multiplicity = tupleIterator.advance()) {
+                // We iterate trough the terms of each tuple
+                ++numberOfRows;
+                for (int termIndex = 0; termIndex < arity; ++termIndex) {
+
+                    Resource resource = tupleIterator.getResource(termIndex);
+                    writer.write("<ans" + numberOfRows + "> <term" + termIndex + "> " +
+                            resource.toString(prefixes) + " .\n");
+                }
+
+            }
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        System.out.println("---------------------------------------------------------------------------------------");
+        System.out.println("  The number of rows returned: " + numberOfRows);
+        System.out.println("=======================================================================================");
+        System.out.println();
+    }
     public void evaluateAndPrintResultsAsTriples(Prefixes prefixes, TupleIterator tupleIterator) throws JRDFoxException {
         int numberOfRows = 0;
         System.out.println();
@@ -242,4 +441,5 @@ public class Benchmark {
         System.out.println("=======================================================================================");
         System.out.println();
     }
+
 }
